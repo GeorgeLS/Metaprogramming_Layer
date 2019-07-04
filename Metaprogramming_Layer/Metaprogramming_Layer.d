@@ -3,11 +3,13 @@ module Metaprogramming_Layer;
 import std.stdio;
 import std.container : DList;
 import std.string;
+import core.stdc.ctype;
 
 enum TokenKind
 {
 	UNKNOWN,
-	IDENTIFIER,
+	NAME,
+	NUMBER,
 	STAR,
 	SLASH,
 	PLUS,
@@ -20,14 +22,9 @@ enum TokenKind
 	LEFT_BRACKET,
 	RIGHT_BRACKET,
 	MODULO,
-	STRUCT,
-	TYPE,
-	KEYWORD_IF,
-	KEYWORD_ELSE,
-	DOUBLE_QUOTE,
-	SINGLE_QUOTE,
 	SEMICOLON,
 	UNARY_OPERATOR,
+	STRING,
 	ANNOTATION
 }
 
@@ -55,6 +52,27 @@ string GenerateSimpleCase(string Case, string TokenKindStr)
 		  break;"(Case, TokenKindStr);
 }
 
+pure
+string GenerateRangeCase(string StartingCase,
+						 string EndingCase,
+						 string TokenKindStr,
+						 string Condition)
+{
+	import std.format;
+
+	return format!"
+		case '%s': .. case '%s':
+			size_t Index = 0U;
+			while (Index != Stream.length && (%s))
+			{
+				++Index;
+			}
+			TokenList.insertBack(Token(Stream[0 .. Index], TokenKind.%s));
+			Stream = Stream[Index .. $];
+			break;
+		"(StartingCase, EndingCase, Condition, TokenKindStr);
+}
+
 struct Lexer
 {
 	public DList!Token Lex(char[] Stream)
@@ -79,6 +97,9 @@ struct Lexer
 				mixin(GenerateSimpleCase("]", "RIGHT_SQUARE_BRACKET"));
 				mixin(GenerateSimpleCase(";", "SEMICOLON"));
 				mixin(GenerateSimpleCase("@", "ANNOTATION"));
+				mixin(GenerateRangeCase("a", "z", "NAME", "isalpha(Stream[Index]) && !isspace(Stream[Index])"));
+				mixin(GenerateRangeCase("A", "Z", "NAME", "isalpha(Stream[Index]) && !isspace(Stream[Index])"));
+				mixin(GenerateRangeCase("0", "9", "NUMBER", "isdigit(Stream[Index]) && !isspace(Stream[Index])"));
 				case '/':
 					if (Stream.length > 1)
 					{
@@ -98,23 +119,20 @@ struct Lexer
 						}
 					}
 					break;
-					
-				case 'a': .. case 'z':
-					// Fallthrough
-				case 'A': .. case 'Z':
-					while (Strem.length && !isspace(Stream[0]))
+				case '"':
+					size_t Index = 0U;
+					while (Index != Stream.length && Stream[0] != '"')
 					{
-						
+						++Index;
 					}
+					TokenList.insertBack(Token(Stream[0 .. Index], TokenKind.STRING));
+					Stream = Stream[Index .. $];
+					break;
 
 				default:
 					TokenList.insertBack(Token(Stream[0 .. 1], TokenKind.UNKNOWN));
 					Stream = Stream[1 .. $];
 					break;
-			}
-			if (Stream.length)
-			{
-				Stream = Stream[1 .. $];
 			}
 		}
 		return TokenList;
